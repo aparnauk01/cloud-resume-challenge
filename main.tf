@@ -33,7 +33,7 @@ resource "aws_s3_bucket_object" "example1" {
   bucket       = aws_s3_bucket.example.id
   source       = "index.html"
   content_type = "text/html"
-  etag    = "${filemd5("index.html")}"
+  etag         = filemd5("index.html")
 }
 
 resource "aws_s3_bucket_object" "imagesfolder" {
@@ -43,23 +43,23 @@ resource "aws_s3_bucket_object" "imagesfolder" {
   key          = each.value
   source       = each.value
   content_type = "image/jpeg"
-  etag    = "${filemd5("${each.value}")}"
+  etag         = filemd5("${each.value}")
 }
 
 module "template_files" {
-  source = "hashicorp/dir/template"
+  source   = "hashicorp/dir/template"
   base_dir = "${path.module}/assets"
 }
 
 resource "aws_s3_bucket_object" "static_files" {
-  depends_on = [aws_s3_bucket.example]
-  for_each   = module.template_files.files
+  depends_on   = [aws_s3_bucket.example]
+  for_each     = module.template_files.files
   bucket       = aws_s3_bucket.example.bucket
   key          = "assets/${each.key}"
   content_type = each.value.content_type
   source       = each.value.source_path
   content      = each.value.content
-  etag    = "${filemd5("assets/${each.key}")}"
+  etag         = filemd5("assets/${each.key}")
 }
 
 resource "aws_cloudfront_origin_access_control" "example" {
@@ -70,11 +70,12 @@ resource "aws_cloudfront_origin_access_control" "example" {
 }
 
 resource "aws_cloudfront_distribution" "example" {
-  depends_on = [ aws_s3_bucket.example,
-  aws_cloudfront_origin_access_control.example ]
-  enabled = true
+  depends_on = [aws_s3_bucket.example,
+  aws_cloudfront_origin_access_control.example]
+  enabled             = true
   default_root_object = "index.html"
-  aliases = [var.root_domain_name]
+  web_acl_id          = aws_wafv2_web_acl.geo_filtering.arn
+  aliases             = [var.root_domain_name]
   default_cache_behavior {
     target_origin_id       = aws_s3_bucket.example.bucket_regional_domain_name
     allowed_methods        = ["GET", "HEAD"]
@@ -100,13 +101,96 @@ resource "aws_cloudfront_distribution" "example" {
     }
   }
   viewer_certificate {
-    acm_certificate_arn  = aws_acm_certificate.domain_cert.arn
-    ssl_support_method = "sni-only"
+    acm_certificate_arn = aws_acm_certificate.domain_cert.arn
+    ssl_support_method  = "sni-only"
   }
 }
 
+
+resource "aws_wafv2_rule_group" "geo_filter" {
+
+  capacity = 10
+  name     = "geo-filter"
+  scope    = "CLOUDFRONT"
+
+  rule {
+    name     = "rule-1"
+    priority = 1
+
+    action {
+      count {}
+    }
+
+    statement {
+      geo_match_statement {
+        country_codes = ["AF"]
+      }
+    }
+
+
+    visibility_config {
+      cloudwatch_metrics_enabled = false
+      metric_name                = "friendly-rule-metric-name"
+      sampled_requests_enabled   = false
+    }
+  }
+  tags = {
+    Tag1 = "Value1"
+    Tag2 = "Value2"
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = false
+    metric_name                = "friendly-metric-name"
+    sampled_requests_enabled   = false
+  }
+}
+
+
+resource "aws_wafv2_web_acl" "geo_filtering" {
+  name  = "geo-filtering"
+  scope = "CLOUDFRONT"
+
+  default_action {
+    block {}
+  }
+
+  rule {
+    name     = "rule-1"
+    priority = 1
+
+    override_action {
+      count {}
+    }
+
+    statement {
+      rule_group_reference_statement {
+        arn = aws_wafv2_rule_group.geo_filter.arn
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = false
+      metric_name                = "friendly-rule-metric-name"
+      sampled_requests_enabled   = false
+    }
+  }
+
+  tags = {
+    Tag1 = "Value1"
+    Tag2 = "Value2"
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = false
+    metric_name                = "friendly-metric-name"
+    sampled_requests_enabled   = false
+  }
+}
+
+
 resource "aws_s3_bucket_policy" "example" {
-  depends_on = [ data.aws_iam_policy_document.example ]
+  depends_on = [data.aws_iam_policy_document.example]
   bucket     = aws_s3_bucket.example.id
   policy     = data.aws_iam_policy_document.example.json
 }
