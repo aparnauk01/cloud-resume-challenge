@@ -14,4 +14,4 @@ Amazon Route 53 – Manages DNS and routes traffic to CloudFront.
 
 ACM – Manages SSL/TLS certificates for HTTPS.
 
-<img src="EmailApp Architecture.png" alt="Architecture Diagram" width="500"/>
+<img src="staticwebsite.png" alt="Architecture Diagram" width="500"/>
